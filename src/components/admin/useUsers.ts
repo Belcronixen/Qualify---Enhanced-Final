@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { QuestionnaireUser, UserResponse, Filters, AdvancedFilters, DespairLevel } from './types';
+import {
+  QuestionnaireUser,
+  UserResponse,
+  Filters,
+  AdvancedFilters,
+  DespairLevel,
+} from './types';
+import { deleteUserAndResponses, updateUserResponseScore } from '../../lib/api';
 
 export function useUsers() {
   const [users, setUsers] = useState<QuestionnaireUser[]>([]);
@@ -8,7 +15,6 @@ export function useUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper to calculate category scores
   function calcCategoryScores(responses: UserResponse[]) {
     const scores: { [key: string]: { score: number; total: number; percentage: number } } = {};
     responses.forEach(r => {
@@ -86,22 +92,58 @@ export function useUsers() {
     fetchUsers();
   }, []);
 
-  const updateUserScore = (userId: string, questionId: string, score: number | null) => {
-    setUsers(prev =>
-      prev.map(user => {
+  const updateUserScore = async (userId: string, responseId: string, newScore: number) => {
+    try {
+      console.log('Updating score:', { userId, responseId, newScore });
+      
+      // Update the score in the database
+      await updateUserResponseScore(responseId, newScore);
+      
+      // Create a function to update a single user's data
+      const updateUserData = (user: QuestionnaireUser): QuestionnaireUser => {
         if (user.id !== userId) return user;
-        const updatedResponses = user.responses?.map(r =>
-          r.question_id !== questionId ? r : { ...r, score }
-        );
-        const categoryScores = calcCategoryScores(updatedResponses || []);
-        const despairLevel = calculateDespairLevel(updatedResponses || []);
-        return { ...user, responses: updatedResponses, categoryScores, despairLevel };
-      })
-    );
-    setFilteredUsers(prev =>
-      prev.map(user => (user.id !== userId ? user : users.find(u => u.id === userId) || user))
-    );
+        
+        // Update the responses array with the new score
+        const updatedResponses = user.responses?.map(response => 
+          response.id === responseId
+            ? { ...response, score: newScore }
+            : response
+        ) || [];
+
+        // Recalculate scores and levels
+        const categoryScores = calcCategoryScores(updatedResponses);
+        const despairLevel = calculateDespairLevel(updatedResponses);
+
+        // Return the updated user object
+        return {
+          ...user,
+          responses: updatedResponses,
+          categoryScores,
+          despairLevel,
+        };
+      };
+
+      // Update both users and filteredUsers states
+      setUsers(prevUsers => prevUsers.map(updateUserData));
+      setFilteredUsers(prevFiltered => prevFiltered.map(updateUserData));
+
+      console.log('Score updated successfully in UI');
+    } catch (err) {
+      console.error('Error updating score:', err);
+      throw err;
+    }
   };
 
-  return { users, filteredUsers, setFilteredUsers, loading, error, updateUserScore };
+  const deleteUser = async (userId: string) => {
+    try {
+      await deleteUserAndResponses(userId);
+      setUsers(prev => prev.filter(user => user.id !== userId));
+      setFilteredUsers(prev => prev.filter(user => user.id !== userId));
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      throw err;
+    }
+  };
+
+  return { users, filteredUsers, setFilteredUsers, loading, error, updateUserScore, deleteUser };
 }

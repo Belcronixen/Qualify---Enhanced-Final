@@ -7,6 +7,8 @@ export interface Filters {
   educationLevel: string;
   countryCode: string;
   despairLevel: string;
+  english_level: string;
+  english_proficiency: string;
 }
 
 export interface AdvancedFilters {
@@ -52,6 +54,8 @@ export interface QuestionnaireUser {
     };
   };
   despairLevel?: DespairLevel;
+  english_level?: string;
+  english_proficiency?: string;
 }
 
 export interface UserResponse {
@@ -73,4 +77,8 @@ export interface UserResponse {
       name: string;
     };
   };
+}
+
+export interface DeleteUserResponse {
+  success: boolean;
 }

@@ -1,21 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useUsers } from '../useUsers';
-import { useResponses } from '../useResponses';
-import { UserCard } from '../UserCard';
-import { FiltersSection } from '../Filters';
-import { Filters, AdvancedFilters, QuestionnaireUser } from '../types';
+import { useUsers } from "../useUsers";
+import { useResponses } from "../useResponses";
+import { UserCard } from "../UserCard";
+import { FiltersSection } from "../Filters";
+import { Filters, AdvancedFilters, QuestionnaireUser } from "../types";
 import { motion } from 'framer-motion';
 import { Users, Filter, Search, X } from 'lucide-react';
-import { Button } from '../../ui/button';
-import { Input } from '../../ui/input';
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
 
 export function ApplicantsPage() {
-  const { users, loading, error, updateUserScore } = useUsers();
+  const { users, filteredUsers, setFilteredUsers, deleteUser, updateUserScore, loading, error } = useUsers();
   const { userResponses, expandedUser, toggleUserExpansion } = useResponses();
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [filteredUsers, setFilteredUsers] = useState<QuestionnaireUser[]>([]);
   const [quickSearch, setQuickSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  
   const [filters, setFilters] = useState<Filters>({
     search: '',
     role: '',
@@ -25,7 +25,11 @@ export function ApplicantsPage() {
     educationLevel: '',
     countryCode: '',
     despairLevel: '',
+    english_level: '',
+    english_proficiency: '',
+    testStatus: 'All',  // Added testStatus filter
   });
+  
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({
     minAge: '',
     maxAge: '',
@@ -37,10 +41,18 @@ export function ApplicantsPage() {
     scoreCategory: '',
   });
 
+  // Define total number of questions. Adjust as needed.
+  const TOTAL_QUESTIONS = 10;
+
+  // Helper function to determine if a user's test is complete.
+  const isTestComplete = (user: QuestionnaireUser): boolean => {
+    if (user.completion_time) return true;
+    return user.responses && user.responses.length === TOTAL_QUESTIONS;
+  };
+
   const filterUsers = useCallback(
     (users: QuestionnaireUser[]) => {
       return users.filter((user) => {
-        // Quick search
         if (quickSearch) {
           const qs = quickSearch.toLowerCase();
           if (
@@ -51,7 +63,6 @@ export function ApplicantsPage() {
           )
             return false;
         }
-        // Basic filters
         const s = filters.search.toLowerCase();
         const mSearch =
           user.first_name.toLowerCase().includes(s) ||
@@ -59,36 +70,36 @@ export function ApplicantsPage() {
           user.email.toLowerCase().includes(s) ||
           user.degree.toLowerCase().includes(s);
         const mRole = !filters.role || user.role === filters.role;
-        const mExp =
-          !filters.experienceLevel ||
-          user.experience_level === filters.experienceLevel;
+        const mExp = !filters.experienceLevel || user.experience_level === filters.experienceLevel;
         const mGen = !filters.gender || user.gender === filters.gender;
         const mCiv = !filters.civilStatus || user.civil_status === filters.civilStatus;
-        const mEdu =
-          !filters.educationLevel || user.education_level === filters.educationLevel;
+        const mEdu = !filters.educationLevel || user.education_level === filters.educationLevel;
         const mCountry = !filters.countryCode || user.country_code === filters.countryCode;
-        const mDespair =
-          !filters.despairLevel ||
-          (user.despairLevel && user.despairLevel.level === filters.despairLevel);
-        // Advanced filters
+        const mDespair = !filters.despairLevel || (user.despairLevel && user.despairLevel.level === filters.despairLevel);
+        const mEnglishLevel = !filters.english_level || user.english_level === filters.english_level;
+        const mEnglishProficiency = !filters.english_proficiency || user.english_proficiency === filters.english_proficiency;
         const age = parseInt(user.age) || 0;
         const mMinAge = !advancedFilters.minAge || age >= parseInt(advancedFilters.minAge);
         const mMaxAge = !advancedFilters.maxAge || age <= parseInt(advancedFilters.maxAge);
         const mDep = !advancedFilters.dependents || user.dependents === advancedFilters.dependents;
         const uDate = new Date(user.created_at);
-        const mDateFrom =
-          !advancedFilters.dateFrom || uDate >= new Date(advancedFilters.dateFrom);
-        const mDateTo =
-          !advancedFilters.dateTo || uDate <= new Date(advancedFilters.dateTo);
+        const mDateFrom = !advancedFilters.dateFrom || uDate >= new Date(advancedFilters.dateFrom);
+        const mDateTo = !advancedFilters.dateTo || uDate <= new Date(advancedFilters.dateTo);
         const mScoreCat =
           !advancedFilters.scoreCategory ||
           (user.categoryScores?.[advancedFilters.scoreCategory] &&
             (!advancedFilters.minScore ||
-              user.categoryScores[advancedFilters.scoreCategory].percentage >=
-                parseFloat(advancedFilters.minScore)) &&
+              user.categoryScores[advancedFilters.scoreCategory].percentage >= parseFloat(advancedFilters.minScore)) &&
             (!advancedFilters.maxScore ||
-              user.categoryScores[advancedFilters.scoreCategory].percentage <=
-                parseFloat(advancedFilters.maxScore)));
+              user.categoryScores[advancedFilters.scoreCategory].percentage <= parseFloat(advancedFilters.maxScore)));
+        // New filter for test completion status.
+        const mTestStatus =
+          filters.testStatus === 'All'
+            ? true
+            : filters.testStatus === 'Completed'
+            ? isTestComplete(user)
+            : !isTestComplete(user);
+            
         return (
           mSearch &&
           mRole &&
@@ -98,21 +109,24 @@ export function ApplicantsPage() {
           mEdu &&
           mCountry &&
           mDespair &&
+          mEnglishLevel &&
+          mEnglishProficiency &&
           mMinAge &&
           mMaxAge &&
           mDep &&
           mDateFrom &&
           mDateTo &&
-          mScoreCat
+          mScoreCat &&
+          mTestStatus
         );
       });
     },
-    [filters, advancedFilters, quickSearch]
+    [filters, advancedFilters, quickSearch, isTestComplete]
   );
 
   useEffect(() => {
     setFilteredUsers(filterUsers(users));
-  }, [users, filterUsers]);
+  }, [users, filterUsers, setFilteredUsers]);
 
   const resetAllFilters = () => {
     setQuickSearch('');
@@ -125,6 +139,9 @@ export function ApplicantsPage() {
       educationLevel: '',
       countryCode: '',
       despairLevel: '',
+      english_level: '',
+      english_proficiency: '',
+      testStatus: 'All', // Reset testStatus filter
     });
     setAdvancedFilters({
       minAge: '',
@@ -160,13 +177,11 @@ export function ApplicantsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Aplicantes</h1>
           <p className="mt-1 text-sm text-gray-600">
-            {filteredUsers.length}{' '}
-            {filteredUsers.length === 1 ? 'aplicante' : 'aplicantes'} encontrados
+            {filteredUsers.length} {filteredUsers.length === 1 ? 'aplicante' : 'aplicantes'} encontrados
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -179,8 +194,6 @@ export function ApplicantsPage() {
           </Button>
         </div>
       </div>
-
-      {/* Quick Search and Filters Panel */}
       <div className="rounded-xl border border-gray-300 bg-white p-4 shadow-lg">
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
@@ -217,9 +230,7 @@ export function ApplicantsPage() {
                 showAdvancedFilters={showAdvancedFilters}
                 onFiltersChange={setFilters}
                 onAdvancedFiltersChange={setAdvancedFilters}
-                onToggleAdvancedFilters={() =>
-                  setShowAdvancedFilters(!showAdvancedFilters)
-                }
+                onToggleAdvancedFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 onReset={resetAllFilters}
                 resultsCount={filteredUsers.length}
               />
@@ -227,17 +238,11 @@ export function ApplicantsPage() {
           )}
         </motion.div>
       </div>
-
-      {/* Results */}
       {filteredUsers.length === 0 ? (
         <div className="flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-gray-300 bg-white p-8 text-center shadow-lg">
           <Users className="mb-4 h-12 w-12 text-gray-500" />
-          <p className="text-lg font-medium text-gray-900">
-            No se encontraron aplicantes
-          </p>
-          <p className="mt-1 text-sm text-gray-600">
-            Intenta ajustar los filtros de búsqueda
-          </p>
+          <p className="text-lg font-medium text-gray-900">No se encontraron aplicantes</p>
+          <p className="mt-1 text-sm text-gray-600">Intenta ajustar los filtros de búsqueda</p>
           {hasActiveFilters && (
             <Button
               variant="outline"
@@ -259,6 +264,7 @@ export function ApplicantsPage() {
               onToggle={() => toggleUserExpansion(user.id)}
               loading={!userResponses[user.id]}
               onScoreUpdate={updateUserScore}
+              onDelete={deleteUser}
             />
           ))}
         </motion.div>

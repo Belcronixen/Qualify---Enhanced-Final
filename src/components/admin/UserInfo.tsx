@@ -38,6 +38,7 @@ export function UserInfo({ user }: UserInfoProps) {
   const formatTime = (sec: number | null) =>
     !sec ? 'No disponible' : `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
 
+  // Prepare the phone number from the stored country code and number
   const cc = user.country_code.replace('+', '');
   const fullPhoneNumber = cc + user.phone_number;
 
@@ -121,6 +122,19 @@ export function UserInfo({ user }: UserInfoProps) {
           </div>
         </div>
       </div>
+
+      {/* New block for English level information */}
+      {user.english_level && (
+        <div className="mt-4 flex items-center gap-2">
+          <p className="text-sm font-medium text-neutral-700">Nivel de Inglés:</p>
+          <p className="text-sm text-neutral-500">
+            {user.english_level}
+            {user.english_level !== 'cero' && user.english_proficiency
+              ? ` - ${user.english_proficiency}`
+              : ''}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

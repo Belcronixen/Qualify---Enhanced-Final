@@ -149,6 +149,55 @@ export function FiltersSection({
           </select>
         </div>
 
+        {/* Nuevo: Nivel de Inglés */}
+        <div>
+          <label className={labelClass}>Nivel de Inglés</label>
+          <select
+            value={filters.english_level}
+            onChange={(e) => updateFilter("english_level", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todos</option>
+            <option value="cero">Cero</option>
+            <option value="bajo">Bajo</option>
+            <option value="medio">Medio</option>
+            <option value="alto">Alto</option>
+            <option value="nativo">Nativo</option>
+          </select>
+        </div>
+
+        {/* Nuevo: Proficiencia de Inglés */}
+        <div>
+          <label className={labelClass}>Proficiencia de Inglés</label>
+          <select
+            value={filters.english_proficiency}
+            onChange={(e) => updateFilter("english_proficiency", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todos</option>
+            <option value="A1">A1</option>
+            <option value="A2">A2</option>
+            <option value="B1">B1</option>
+            <option value="B2">B2</option>
+            <option value="C1">C1</option>
+            <option value="C2">C2</option>
+          </select>
+        </div>
+
+        {/* New: Test Completion Status Filter */}
+        <div>
+          <label className={labelClass}>Estado de Test</label>
+          <select
+            value={filters.testStatus}
+            onChange={(e) => updateFilter("testStatus", e.target.value)}
+            className={selectClass}
+          >
+            <option value="All">Todos</option>
+            <option value="Completed">Completado</option>
+            <option value="Incomplete">Incompleto</option>
+          </select>
+        </div>
+
         {/* Despair Level */}
         <div>
           <label className={labelClass}>Nivel de Desesperación</label>

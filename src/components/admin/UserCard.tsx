@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -6,6 +6,7 @@ import {
   RotateCcw,
   Eraser,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/button';
@@ -13,7 +14,7 @@ import { QuestionnaireUser, UserResponse } from './types';
 import { UserResponses } from './UserResponses';
 import { CategoryScores } from './CategoryScores';
 import { UserInfo } from './UserInfo';
-import { scoreUserResponse } from '../../lib/api';
+import { scoreUserResponse, deleteUserAndResponses } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
 interface UserCardProps {
@@ -22,13 +23,12 @@ interface UserCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   loading: boolean;
-  onScoreUpdate: (userId: string, questionId: string, score: number | null) => void;
+  onScoreUpdate: (userId: string, responseId: string, score: number | null) => void;
+  onDelete: (userId: string) => void;
 }
 
 async function getProviderConfig() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   const metadata = session?.user?.user_metadata;
   const provider = metadata?.scoring_provider;
   const model = metadata?.scoring_model;
@@ -57,11 +57,21 @@ export function UserCard({
   onToggle,
   loading,
   onScoreUpdate,
+  onDelete,
 }: UserCardProps) {
   const [isScoring, setIsScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scoringProgress, setScoringProgress] = useState(0);
   const [showActions, setShowActions] = useState(false);
+
+  // Define total number of questions. Adjust this constant as needed.
+  const TOTAL_QUESTIONS = 10;
+
+  // Determine if the test is complete based on completion_time or response count.
+  const isTestComplete = (user: QuestionnaireUser): boolean => {
+    if (user.completion_time) return true;
+    return user.responses && user.responses.length === TOTAL_QUESTIONS;
+  };
 
   const totalResponses = user.responses?.length || 0;
   const scoredResponses = user.responses?.filter((r) => r.score !== null).length || 0;
@@ -79,7 +89,6 @@ export function UserCard({
     for (const r of toScore) {
       try {
         await getProviderConfig();
-        // Optionally truncate the response text for display purposes
         const truncated =
           r.response_text.length > 100
             ? r.response_text.substring(0, 100) + '...'
@@ -89,7 +98,7 @@ export function UserCard({
           r.question_id,
           user.id
         );
-        onScoreUpdate(user.id, r.question_id, score);
+        onScoreUpdate(user.id, r.id, score);
         completed++;
         setScoringProgress(Math.round((completed / toScore.length) * 100));
         await new Promise((res) => setTimeout(res, 2000));
@@ -112,13 +121,11 @@ export function UserCard({
       await resetNonSelectionScores(user.id);
       user.responses
         .filter((r) => !r.is_selection_response)
-        .forEach((r) => onScoreUpdate(user.id, r.question_id, null));
+        .forEach((r) => onScoreUpdate(user.id, r.id, null));
       await handleScoreResponses();
     } catch (err) {
       console.error('Error resetting scores:', err);
-      setError(
-        err instanceof Error ? err.message : 'Error al reiniciar las calificaciones'
-      );
+      setError(err instanceof Error ? err.message : 'Error al reiniciar las calificaciones');
     }
     setIsScoring(false);
   };
@@ -131,14 +138,25 @@ export function UserCard({
       await resetNonSelectionScores(user.id);
       user.responses
         .filter((r) => !r.is_selection_response)
-        .forEach((r) => onScoreUpdate(user.id, r.question_id, null));
+        .forEach((r) => onScoreUpdate(user.id, r.id, null));
     } catch (err) {
       console.error('Error clearing scores:', err);
-      setError(
-        err instanceof Error ? err.message : 'Error al borrar las calificaciones'
-      );
+      setError(err instanceof Error ? err.message : 'Error al borrar las calificaciones');
     }
     setIsScoring(false);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este usuario y todas sus respuestas?")) {
+      return;
+    }
+    try {
+      await deleteUserAndResponses(user.id);
+      onDelete(user.id);
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      setError(err instanceof Error ? err.message : "Error al eliminar el usuario");
+    }
   };
 
   return (
@@ -151,8 +169,18 @@ export function UserCard({
     >
       <div className="p-4 md:p-6">
         <UserInfo user={user} />
-
-        {/* Mobile Action Button */}
+        {/* Display test completion status */}
+        <div className="mt-2">
+          {isTestComplete(user) ? (
+            <span className="inline-block rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
+              Completado
+            </span>
+          ) : (
+            <span className="inline-block rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
+              Incompleto
+            </span>
+          )}
+        </div>
         <div className="mt-4 md:hidden">
           <Button
             onClick={() => setShowActions(!showActions)}
@@ -167,11 +195,8 @@ export function UserCard({
             )}
           </Button>
         </div>
-
-        {/* Action Buttons */}
         <AnimatePresence>
-          {(showActions ||
-            window.matchMedia('(min-width: 769px)').matches) && (
+          {(showActions || window.matchMedia('(min-width: 769px)').matches) && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -187,11 +212,7 @@ export function UserCard({
                   className="flex items-center justify-center gap-2 md:justify-start"
                 >
                   <Play className="h-4 w-4" />
-                  {isScoring ? (
-                    <span>{scoringProgress}%</span>
-                  ) : (
-                    <span>Calificar</span>
-                  )}
+                  {isScoring ? <span>{scoringProgress}%</span> : <span>Calificar</span>}
                 </Button>
                 <Button
                   variant="outline"
@@ -210,6 +231,14 @@ export function UserCard({
                 >
                   <Eraser className="h-4 w-4" />
                   <span>Borrar</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDeleteUser}
+                  className="flex items-center justify-center gap-2 md:justify-start text-red-600 border-red-300 hover:bg-red-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Eliminar</span>
                 </Button>
               </div>
               <Button
@@ -232,14 +261,12 @@ export function UserCard({
             </motion.div>
           )}
         </AnimatePresence>
-
         {error && (
           <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-300 bg-red-100 p-4 text-sm text-red-700">
             <AlertTriangle className="h-5 w-5 flex-shrink-0" />
             <p>{error}</p>
           </div>
         )}
-
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="text-gray-600">Progreso de Calificación</span>
@@ -255,12 +282,10 @@ export function UserCard({
             />
           </div>
         </div>
-
         <div className="mt-6">
           <CategoryScores scores={user.categoryScores} />
         </div>
       </div>
-
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -270,7 +295,12 @@ export function UserCard({
             transition={{ duration: 0.2 }}
             className="border-t border-gray-300"
           >
-            <UserResponses responses={responses} loading={loading} />
+            <UserResponses 
+              responses={responses} 
+              loading={loading}
+              onUpdateScore={onScoreUpdate}
+              userId={user.id}
+            />
           </motion.div>
         )}
       </AnimatePresence>
