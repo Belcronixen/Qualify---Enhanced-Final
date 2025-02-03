@@ -73,7 +73,7 @@ export function LandingPage() {
               Bienvenido
             </h1>
             <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-neutral-200 sm:mt-6 sm:text-lg md:text-xl">
-              No hay instrucciones. Solo la siguiente etapa.
+            La evaluación tendrá una duración de entre 25 y 40 minutos.
             </p>
             <div className="mt-6 sm:mt-8 md:mt-10">
               <Link to="/questionnaire">
