@@ -20,19 +20,20 @@ export function useResponses() {
           is_selection_response,
           selected_option,
           question_id,
-          question:questions (
+          question:questions!inner (
             question_text,
             is_despair,
             selection_1,
             selection_2,
             selection_3,
             selection_4,
-            category:categories (
+            category:categories!inner (
               name
             )
           )
         `)
         .eq('user_id', userId)
+        .not('question.is_hidden', 'eq', true)
         .order('created_at', { ascending: true });
 
       if (responsesError) throw responsesError;

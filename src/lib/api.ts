@@ -51,17 +51,23 @@ export async function deleteUserAndResponses(userId: string) {
 
 export async function updateUserResponseScore(responseId: string, newScore: number) {
   console.log('Updating score:', { responseId, newScore });
-  const { data, error } = await supabase
-    .rpc('update_response_score', {
-      response_id: responseId,
-      new_score: newScore
-    });
+  try {
+    const { data, error } = await supabase
+      .from('user_responses')
+      .update({ score: newScore })
+      .eq('id', responseId)
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Error updating score:', error);
-    throw error;
+    if (error) {
+      console.error('Error updating score:', error);
+      throw error;
+    }
+
+    console.log('Score updated successfully:', data);
+    return data;
+  } catch (err) {
+    console.error('Error in updateUserResponseScore:', err);
+    throw err;
   }
-
-  console.log('Score updated successfully:', data);
-  return data;
 }
