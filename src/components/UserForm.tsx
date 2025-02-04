@@ -180,19 +180,27 @@ export function UserForm() {
 
   const handleChange = (f: keyof typeof formData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => setFormData(p => {
-    if (!formTouched) setFormTouched(true);
-    return { ...p, [f]: e.target.value };
-  });
+  ) =>
+    setFormData((prev) => {
+      if (!formTouched) setFormTouched(true);
+      return { ...prev, [f]: e.target.value };
+    });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
         setError('El archivo es demasiado grande. El tamaño máximo es 5MB.');
         return;
       }
-      if (!['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
+      if (
+        ![
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ].includes(file.type)
+      ) {
         setError('Por favor sube un archivo PDF o Word (.doc, .docx)');
         return;
       }
@@ -260,7 +268,7 @@ export function UserForm() {
           cacheControl: '3600',
           upsert: true
         });
-      
+
       if (uploadError) throw uploadError;
 
       // Update user record with CV path
@@ -270,10 +278,10 @@ export function UserForm() {
         .eq('id', user.id);
 
       if (updateError) throw updateError;
-      
+
       setUser({ ...formData, countryCode, phoneNumber });
       setUserId(user.id);
-      
+
       // Show completion modal directly
       navigate('/questions', { state: { showCompletionDirectly: true } });
     } catch (err) {
@@ -590,12 +598,13 @@ export function UserForm() {
                       </div>
                       <p className="text-xs text-neutral-500">PDF o Word hasta 5MB</p>
                     </div>
+                    {/* Removed `required` from the file input to prevent browser validation
+                        from trying to focus a hidden input. Validation is handled in handleSubmit. */}
                     <input
                       type="file"
                       className="hidden"
                       accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={handleFileChange}
-                      required
                     />
                   </label>
                 </div>
@@ -604,8 +613,20 @@ export function UserForm() {
                 {isSubmitting ? (
                   <span className="flex items-center justify-center">
                     <svg className="mr-2 h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     Procesando...
                   </span>
