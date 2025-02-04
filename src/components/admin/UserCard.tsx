@@ -7,6 +7,7 @@ import {
   Eraser,
   AlertTriangle,
   Trash2,
+  FileText,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/button';
@@ -27,29 +28,6 @@ interface UserCardProps {
   onDelete: (userId: string) => void;
 }
 
-async function getProviderConfig() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const metadata = session?.user?.user_metadata;
-  const provider = metadata?.scoring_provider;
-  const model = metadata?.scoring_model;
-  const apiKey = metadata?.[`${provider}_api_key`];
-  if (!provider || !model || !apiKey) {
-    throw new Error(
-      'Por favor configura el proveedor de IA y la clave API en la sección de configuración'
-    );
-  }
-  return { provider, model, apiKey };
-}
-
-async function resetNonSelectionScores(userId: string) {
-  const { error } = await supabase
-    .from('user_responses')
-    .update({ score: null })
-    .eq('user_id', userId)
-    .eq('is_selection_response', false);
-  if (error) throw error;
-}
-
 export function UserCard({
   user,
   responses,
@@ -67,6 +45,28 @@ export function UserCard({
   const totalResponses = user.responses?.length || 0;
   const scoredResponses = user.responses?.filter((r) => r.score !== null).length || 0;
   const unscoredCount = totalResponses - scoredResponses;
+
+  const handleViewCV = async () => {
+    if (!user.cv_file_path) {
+      alert('No hay CV disponible para este usuario');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('private')
+        .createSignedUrl(user.cv_file_path, 300); // URL valid for 5 minutes
+
+      if (error) throw error;
+      
+      if (data.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (err) {
+      console.error('Error accessing CV:', err);
+      setError('Error al acceder al CV. Por favor intenta de nuevo.');
+    }
+  };
 
   const handleScoreResponses = async () => {
     if (!user.responses) return;
@@ -210,6 +210,15 @@ export function UserCard({
                 >
                   <Eraser className="h-4 w-4" />
                   <span>Borrar</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleViewCV}
+                  disabled={!user.cv_file_path}
+                  className="flex items-center justify-center gap-2 md:justify-start"
+                >
+                  <FileText className="h-4 w-4" />
+                  {user.cv_file_path ? 'Ver CV' : 'Sin CV'}
                 </Button>
                 <Button
                   variant="outline"

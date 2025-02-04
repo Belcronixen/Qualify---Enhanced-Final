@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useQuestionnaireStore } from '../store/useQuestionnaireStore';
 import { Timer } from './Timer';
@@ -20,6 +20,7 @@ interface SelectionOption { number: number; text: string; }
 
 export function QuestionPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     currentQuestionIndex,
     answers,
@@ -40,9 +41,6 @@ export function QuestionPage() {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   useEffect(() => {
-    console.log('QuestionPage useEffect - userData:', userData);
-    console.log('QuestionPage useEffect - userId:', userId);
-
     if (!userData?.email) {
       console.warn('No user data, redirecting to questionnaire');
       navigate('/questionnaire');
@@ -62,7 +60,21 @@ export function QuestionPage() {
         console.log('Fetch error:', error);
 
         if (error) throw error;
-        if (!data || data.length === 0) throw new Error('No se encontraron preguntas');
+
+        // If all questions are hidden, show completion modal directly
+        if (!data || data.length === 0) {
+          if (userId) {
+            // Update completion time to 0 since we're skipping questions
+            const { error: updateError } = await supabase
+              .from('questionnaire_users')
+              .update({ completion_time: 0 })
+              .eq('id', userId);
+            if (updateError) throw updateError;
+          }
+          setShowCompletionModal(true);
+          setLoading(false);
+          return;
+        }
 
         setQuestions(data);
         if (!startTime) setStartTime(Date.now());
@@ -75,7 +87,7 @@ export function QuestionPage() {
     }
 
     fetchQuestions();
-  }, [userData, navigate, startTime, setStartTime]);
+  }, [userData, navigate, startTime, setStartTime, userId]);
 
   const shuffledOptions = useMemo(() => {
     const q = questions[currentQuestionIndex];
@@ -116,9 +128,6 @@ export function QuestionPage() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const [code, num] = userData?.phone ? userData.phone.split(' ').map(s => s.trim()) : ['506', ''];
-      const countryCode = '+' + (code || '506');
-      const phoneNumber = num || '';
       const { error: respError } = await supabase.from('user_responses').insert({
         user_id: userId,
         question_id: q.id,
@@ -153,7 +162,6 @@ export function QuestionPage() {
     navigate('/');
   };
 
-  // If no questions or still loading, show loading state
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
@@ -162,7 +170,6 @@ export function QuestionPage() {
     );
   }
 
-  // If error occurred, show error state
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white px-4">
@@ -178,7 +185,38 @@ export function QuestionPage() {
     );
   }
 
-  // Main render method
+  // If all questions are hidden, only show the completion modal
+  if (showCompletionModal) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-4 rounded-full bg-green-100 p-3">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <h2 className="mb-2 text-xl font-bold text-neutral-900 sm:text-2xl">
+              ¡Felicitaciones!
+            </h2>
+            <p className="mb-6 text-neutral-600">
+              Hemos recibido tus datos exitosamente. Nuestro equipo los revisará y nos pondremos en contacto contigo.
+            </p>
+            <p className="mb-8 text-sm text-neutral-500">
+              Apreciamos tu tiempo y esfuerzo.
+            </p>
+            <Button onClick={handleFinish} size="lg" className="w-full sm:w-auto">
+              Volver al Inicio
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Main render method for questions
   return (
     <div className="min-h-[100dvh] bg-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -245,35 +283,6 @@ export function QuestionPage() {
           </div>
         </div>
       </div>
-
-      {/* Completion Modal */}
-      {showCompletionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8"
-          >
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 rounded-full bg-green-100 p-3">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-              </div>
-              <h2 className="mb-2 text-xl font-bold text-neutral-900 sm:text-2xl">
-                ¡Felicitaciones!
-              </h2>
-              <p className="mb-6 text-neutral-600">
-                Hemos recibido tus respuestas exitosamente. Nuestro equipo las revisará y nos pondremos en contacto contigo.
-              </p>
-              <p className="mb-8 text-sm text-neutral-500">
-                Apreciamos tu tiempo y esfuerzo.
-              </p>
-              <Button onClick={handleFinish} size="lg" className="w-full sm:w-auto">
-                Volver al Inicio
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

@@ -5,9 +5,10 @@ import { UserCard } from "../UserCard";
 import { FiltersSection } from "../Filters";
 import { Filters, AdvancedFilters, QuestionnaireUser } from "../types";
 import { motion } from 'framer-motion';
-import { Users, Filter, Search, X, Download } from 'lucide-react';
+import { Users, Filter, Search, X, Download, FileText } from 'lucide-react';
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
+import { supabase } from '../../../lib/supabase';
 
 // Country codes to names mapping
 const COUNTRY_NAMES: { [key: string]: string } = {
@@ -32,103 +33,172 @@ const COUNTRY_NAMES: { [key: string]: string } = {
   '+34': 'Spain',
 };
 
-function downloadCSV(users: QuestionnaireUser[]) {
-  // Define headers
-  const headers = [
-    'First Name',
-    'Last Name',
-    'Email',
-    'Country Code',
-    'Country Name',
-    'Phone Number',
-    'Age',
-    'Role',
-    'Experience Level',
-    'Sign Up Date',
-    'Completion Time (minutes)',
-    'Expected Salary (USD)',
-    'Lower Salary Acceptance',
-    'Dependents',
-    'English Level',
-    'English Proficiency',
-    'Native Language',
-    'Despair Level',
-    'Logic Score',
-    'Technology Score',
-    'Hourly Rate (USD)',
-    'Daily Hours Available',
-    'Weekend Availability',
-    'Weekend Hours',
-    'Immediate Availability'
-  ];
+async function generateCVLink(cvPath: string | null): Promise<string> {
+  if (!cvPath) return '';
+  
+  try {
+    const { data, error } = await supabase.storage
+      .from('private')
+      .createSignedUrl(cvPath, 7 * 24 * 60 * 60); // 7 days link validity
 
-  // Transform data
-  const rows = users.map(user => {
-    // Find the lower salary acceptance response
-    const lowerSalaryResponse = user.responses?.find(r => 
-      r.question?.question_text?.toLowerCase().includes('aceptar un salario menor')
+    if (error) {
+      console.error('Error generating CV link:', error);
+      return '';
+    }
+
+    return data.signedUrl;
+  } catch (err) {
+    console.error('Error generating CV link:', err);
+    return '';
+  }
+}
+
+async function downloadCSV(users: QuestionnaireUser[]) {
+  try {
+    // First, generate signed URLs for all CVs
+    const cvLinks = await Promise.all(
+      users.map(user => generateCVLink(user.cv_file_path))
     );
 
-    // Get category scores
-    const logicScore = user.categoryScores?.['Resolución de Problemas y Pensamiento Crítico']?.percentage || 0;
-    const techScore = user.categoryScores?.['Competencia Tecnológica Básica']?.percentage || 0;
-
-    // Get country name from code
-    const countryName = COUNTRY_NAMES[user.country_code] || 'Unknown';
-
-    // Calculate completion time in minutes
-    const completionTimeMinutes = user.completion_time 
-      ? Math.round(user.completion_time / 60) 
-      : 'N/A';
-
-    return [
-      user.first_name,
-      user.last_name,
-      user.email,
-      user.country_code,
-      countryName,
-      user.phone_number,
-      user.age,
-      user.role,
-      user.experience_level,
-      new Date(user.created_at).toLocaleDateString(),
-      completionTimeMinutes,
-      user.expected_salary_usd || 'N/A',
-      lowerSalaryResponse?.response_text || 'N/A',
-      user.dependents,
-      user.english_level,
-      user.english_proficiency || 'N/A',
-      user.native_language,
-      user.despairLevel?.level || 'N/A',
-      `${logicScore.toFixed(2)}%`,
-      `${techScore.toFixed(2)}%`,
-      user.hourly_rate_usd || 'N/A',
-      user.daily_availability_hours || 'N/A',
-      user.weekend_availability ? 'Yes' : 'No',
-      user.weekend_hours || 'N/A',
-      user.immediate_availability ? 'Yes' : 'No'
+    // Define headers with all possible fields
+    const headers = [
+      'ID',
+      'Email',
+      'First Name',
+      'Last Name',
+      'Role',
+      'Experience Level',
+      'Age',
+      'Gender',
+      'Civil Status',
+      'Dependents',
+      'Education Level',
+      'Degree',
+      'Country Code',
+      'Phone Number',
+      'Native Language',
+      'English Level',
+      'English Proficiency',
+      'Expected Salary (USD)',
+      'Hourly Rate (USD)',
+      'Daily Hours Available',
+      'Weekend Availability',
+      'Weekend Hours',
+      'Immediate Availability',
+      'Internet Speed (Mbps)',
+      'CV Link',
+      'Created At',
+      'Updated At',
+      'Completion Time (minutes)',
+      'Average Score',
+      'Technical Score',
+      'Problem Solving Score',
+      'Personal Score',
+      'Despair Level',
+      'Despair Score'
     ];
-  });
 
-  // Create CSV content
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => 
-      typeof cell === 'string' && cell.includes(',') 
-        ? `"${cell}"` 
-        : cell
-    ).join(','))
-  ].join('\n');
+    // Transform data
+    const rows = users.map((user, index) => {
+      // Calculate average scores
+      const avgScore = user.categoryScores ? 
+        Object.values(user.categoryScores).reduce((acc, cat) => acc + cat.percentage, 0) / Object.keys(user.categoryScores).length : 0;
+      
+      const techScore = user.categoryScores?.['Competencia Tecnológica Básica']?.percentage || 0;
+      const problemScore = user.categoryScores?.['Resolución de Problemas y Pensamiento Crítico']?.percentage || 0;
+      const personalScore = user.categoryScores?.['Estado Personal y Recursos']?.percentage || 0;
 
-  // Create and trigger download
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', `applicants_${new Date().toISOString().split('T')[0]}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+      // Format dates
+      const createdAt = new Date(user.created_at).toLocaleString();
+      const updatedAt = user.updated_at ? new Date(user.updated_at).toLocaleString() : '';
+      
+      // Calculate completion time in minutes
+      const completionTimeMinutes = user.completion_time ? Math.round(user.completion_time / 60) : 0;
+
+      // Get CV link
+      const cvLink = cvLinks[index];
+
+      return [
+        user.id,
+        user.email,
+        user.first_name,
+        user.last_name,
+        user.role,
+        user.experience_level,
+        user.age,
+        user.gender,
+        user.civil_status,
+        user.dependents,
+        user.education_level,
+        user.degree,
+        user.country_code,
+        user.phone_number,
+        user.native_language,
+        user.english_level,
+        user.english_proficiency,
+        user.expected_salary_usd,
+        user.hourly_rate_usd,
+        user.daily_availability_hours,
+        user.weekend_availability ? 'Yes' : 'No',
+        user.weekend_hours,
+        user.immediate_availability ? 'Yes' : 'No',
+        user.internet_speed_mbps,
+        cvLink, // Include the signed URL for CV
+        createdAt,
+        updatedAt,
+        completionTimeMinutes,
+        `${avgScore.toFixed(2)}%`,
+        `${techScore.toFixed(2)}%`,
+        `${problemScore.toFixed(2)}%`,
+        `${personalScore.toFixed(2)}%`,
+        user.despairLevel?.level || 'N/A',
+        user.despairLevel ? `${user.despairLevel.percentage.toFixed(2)}%` : 'N/A'
+      ];
+    });
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => 
+        cell === null || cell === undefined ? '' :
+        typeof cell === 'string' && (cell.includes(',') || cell.includes('"') || cell.includes('\n')) ? 
+          `"${cell.replace(/"/g, '""')}"` : 
+          cell
+      ).join(','))
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `applicants_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.error('Error generating CSV:', err);
+    alert('Error generating CSV file. Please try again later.');
+  }
+}
+
+// Add function to view CV files
+async function viewCV(cvPath: string) {
+  try {
+    const { data, error } = await supabase.storage
+      .from('private')
+      .createSignedUrl(cvPath, 300); // URL valid for 5 minutes
+
+    if (error) throw error;
+    
+    if (data.signedUrl) {
+      // Open PDF in new tab
+      window.open(data.signedUrl, '_blank');
+    }
+  } catch (err) {
+    console.error('Error accessing CV:', err);
+    alert('Error accessing CV file. Please try again later.');
+  }
 }
 
 export function ApplicantsPage() {

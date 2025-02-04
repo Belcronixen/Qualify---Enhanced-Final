@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
-import PhoneInput from 'react-phone-input-2';
-import 'react-phone-input-2/lib/style.css';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useQuestionnaireStore } from '../store/useQuestionnaireStore';
 import { supabase } from '../lib/supabase';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Upload } from 'lucide-react';
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
 
 const ROLES = [
   { value: 'web-developer', label: 'Desarrollador Web' },
@@ -151,6 +151,7 @@ export function UserForm() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formTouched, setFormTouched] = useState(false);
+  const [cvFile, setCvFile] = useState<File | null>(null);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -179,18 +180,35 @@ export function UserForm() {
 
   const handleChange = (f: keyof typeof formData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) =>
-    setFormData((p) => {
-      if (!formTouched) setFormTouched(true);
-      return {
-      ...p,
-      [f]: e.target.value
-    }});
+  ) => setFormData(p => {
+    if (!formTouched) setFormTouched(true);
+    return { ...p, [f]: e.target.value };
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setError('El archivo es demasiado grande. El tamaño máximo es 5MB.');
+        return;
+      }
+      if (!['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
+        setError('Por favor sube un archivo PDF o Word (.doc, .docx)');
+        return;
+      }
+      setCvFile(file);
+      setError(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!formTouched) return;
+    if (!cvFile) {
+      setError('Por favor sube tu curriculum');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const parts = formData.phone ? formData.phone.split(' ') : ['506', ''],
@@ -198,6 +216,8 @@ export function UserForm() {
         number = parts.slice(1).join('');
       const countryCode = '+' + code,
         phoneNumber = number;
+
+      // First create the user record without CV
       const { data: user, error: upsertError } = await supabase
         .from('questionnaire_users')
         .upsert(
@@ -223,17 +243,39 @@ export function UserForm() {
             weekend_hours: formData.weekendHours ? parseInt(formData.weekendHours) : null,
             immediate_availability: formData.immediateAvailability === 'true',
             internet_speed_mbps: formData.internetSpeedMbps ? parseInt(formData.internetSpeedMbps) : null,
-            completion_time: null
+            completion_time: 0 // Set completion time to 0 since we're skipping questions
           },
           { onConflict: 'email' }
         )
         .select()
         .single();
+
       if (upsertError) throw upsertError;
-      await supabase.from('user_responses').delete().eq('user_id', user.id);
+
+      // Then upload CV to private storage
+      const cvFileName = `${user.id}/${Date.now()}-${cvFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('private')
+        .upload(cvFileName, cvFile, {
+          cacheControl: '3600',
+          upsert: true
+        });
+      
+      if (uploadError) throw uploadError;
+
+      // Update user record with CV path
+      const { error: updateError } = await supabase
+        .from('questionnaire_users')
+        .update({ cv_file_path: cvFileName })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+      
       setUser({ ...formData, countryCode, phoneNumber });
       setUserId(user.id);
-      navigate('/questions');
+      
+      // Show completion modal directly
+      navigate('/questions', { state: { showCompletionDirectly: true } });
     } catch (err) {
       console.error('Error:', err);
       setError(err instanceof Error ? err.message : 'Ha ocurrido un error inesperado');
@@ -364,14 +406,12 @@ export function UserForm() {
                 onChange={handleChange('degree')}
                 placeholder="Ej: Ingeniería en Sistemas, Diplomado en Marketing"
               />
-              {/* New field: Nivel de Inglés */}
               <SelectField
                 id="englishLevel"
                 label="Nivel de Inglés"
                 value={formData.englishLevel}
                 onChange={(e) => {
                   const val = e.target.value;
-                  // If "Cero" is selected, clear any detailed proficiency
                   setFormData((p) => ({
                     ...p,
                     englishLevel: val,
@@ -381,7 +421,6 @@ export function UserForm() {
                 options={ENGLISH_LEVEL_OPTIONS}
                 defaultOption="Selecciona nivel de inglés"
               />
-              {/* Conditionally render detailed English level if the selected level is not "Cero" */}
               {formData.englishLevel && formData.englishLevel !== 'cero' && (
                 <div className="mt-4">
                   <p className="text-sm text-neutral-600 mb-1">
@@ -424,8 +463,6 @@ export function UserForm() {
                   defaultOption="Selecciona nivel de experiencia"
                 />
               )}
-
-              {/* Native Language */}
               <SelectField
                 id="nativeLanguage"
                 label="Idioma Nativo"
@@ -434,8 +471,6 @@ export function UserForm() {
                 options={LANGUAGES}
                 defaultOption="Selecciona tu idioma nativo"
               />
-
-              {/* Expected Monthly Salary */}
               <div>
                 <label htmlFor="expectedSalaryUsd" className="block text-sm font-medium text-neutral-700">
                   Salario Mensual Esperado (USD)
@@ -451,8 +486,6 @@ export function UserForm() {
                   className="mt-1"
                 />
               </div>
-
-              {/* Hourly Rate */}
               <div>
                 <label htmlFor="hourlyRateUsd" className="block text-sm font-medium text-neutral-700">
                   Tarifa por Hora (USD)
@@ -467,8 +500,6 @@ export function UserForm() {
                   className="mt-1"
                 />
               </div>
-
-              {/* Daily Availability Hours */}
               <div>
                 <label htmlFor="dailyAvailabilityHours" className="block text-sm font-medium text-neutral-700">
                   Horas Disponibles por Día
@@ -484,8 +515,6 @@ export function UserForm() {
                   className="mt-1"
                 />
               </div>
-
-              {/* Weekend Availability */}
               <div>
                 <label htmlFor="weekendAvailability" className="block text-sm font-medium text-neutral-700">
                   ¿Puedes Trabajar los Fines de Semana?
@@ -500,8 +529,6 @@ export function UserForm() {
                   <option value="true">Sí</option>
                 </select>
               </div>
-
-              {/* Weekend Hours (conditional) */}
               {formData.weekendAvailability === 'true' && (
                 <div>
                   <label htmlFor="weekendHours" className="block text-sm font-medium text-neutral-700">
@@ -519,8 +546,6 @@ export function UserForm() {
                   />
                 </div>
               )}
-
-              {/* Immediate Availability */}
               <div>
                 <label htmlFor="immediateAvailability" className="block text-sm font-medium text-neutral-700">
                   ¿Estás Disponible para Comenzar Inmediatamente?
@@ -535,8 +560,6 @@ export function UserForm() {
                   <option value="true">Sí</option>
                 </select>
               </div>
-
-              {/* Internet Speed */}
               <div>
                 <label htmlFor="internetSpeedMbps" className="block text-sm font-medium text-neutral-700">
                   Velocidad de Internet (Mbps)
@@ -552,7 +575,31 @@ export function UserForm() {
                   className="mt-1"
                 />
               </div>
-
+              <div>
+                <label className="block text-sm font-medium text-neutral-700">
+                  Curriculum Vitae (PDF o Word)
+                </label>
+                <div className="mt-1 flex items-center justify-center">
+                  <label className="relative flex w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-white p-6 hover:border-neutral-400">
+                    <div className="space-y-1 text-center">
+                      <Upload className="mx-auto h-12 w-12 text-neutral-400" />
+                      <div className="flex text-sm text-neutral-600">
+                        <span className="relative rounded-md font-medium text-blue-600 hover:text-blue-500">
+                          {cvFile ? cvFile.name : 'Subir archivo'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-500">PDF o Word hasta 5MB</p>
+                    </div>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={handleFileChange}
+                      required
+                    />
+                  </label>
+                </div>
+              </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <span className="flex items-center justify-center">
