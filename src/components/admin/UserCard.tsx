@@ -64,15 +64,6 @@ export function UserCard({
   const [scoringProgress, setScoringProgress] = useState(0);
   const [showActions, setShowActions] = useState(false);
 
-  // Define total number of questions. Adjust this constant as needed.
-  const TOTAL_QUESTIONS = 10;
-
-  // Determine if the test is complete based on completion_time or response count.
-  const isTestComplete = (user: QuestionnaireUser): boolean => {
-    if (user.completion_time) return true;
-    return user.responses && user.responses.length === TOTAL_QUESTIONS;
-  };
-
   const totalResponses = user.responses?.length || 0;
   const scoredResponses = user.responses?.filter((r) => r.score !== null).length || 0;
   const unscoredCount = totalResponses - scoredResponses;
@@ -169,18 +160,6 @@ export function UserCard({
     >
       <div className="p-4 md:p-6">
         <UserInfo user={user} />
-        {/* Display test completion status */}
-        <div className="mt-2">
-          {isTestComplete(user) ? (
-            <span className="inline-block rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
-              Completado
-            </span>
-          ) : (
-            <span className="inline-block rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
-              Incompleto
-            </span>
-          )}
-        </div>
         <div className="mt-4 md:hidden">
           <Button
             onClick={() => setShowActions(!showActions)}

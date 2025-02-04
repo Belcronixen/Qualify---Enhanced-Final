@@ -91,8 +91,8 @@ export function UserResponses({
   const handleSaveScore = async (response: UserResponse) => {
     try {
       const newScore = parseFloat(tempScore);
-      if (isNaN(newScore) || newScore < 0 || newScore > 1) {
-        setError("La puntuación debe estar entre 0 y 1");
+      if (isNaN(newScore) || newScore < 0 || newScore > 10) {
+        setError("La puntuación debe estar entre 0 y 10");
         return;
       }
 
@@ -102,14 +102,15 @@ export function UserResponses({
         [response.id]: newScore
       }));
       
-      // Send to database without waiting
-      onUpdateScore(userId, response.id, newScore).catch(err => {
+      // Send to database and wait for response
+      await onUpdateScore(userId, response.id, newScore / 10).catch(err => {
         console.error('Error updating score in database:', err);
         // Optionally revert the visual update if the database update fails
         setLocalScores(prev => ({
           ...prev,
           [response.id]: response.score
         }));
+        throw err;
       });
 
       setEditingResponseId(null);

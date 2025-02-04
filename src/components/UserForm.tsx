@@ -46,6 +46,22 @@ const EDUCATION_LEVELS = [
   { value: 'doctorado', label: 'Doctorado' }
 ] as const;
 
+const LANGUAGES = [
+  { value: 'es', label: 'Español' },
+  { value: 'en', label: 'English' },
+  { value: 'fr', label: 'Français' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'pt', label: 'Português' },
+  { value: 'ru', label: 'Русский' },
+  { value: 'zh', label: '中文' },
+  { value: 'ja', label: '日本語' },
+  { value: 'ko', label: '한국어' },
+  { value: 'ar', label: 'العربية' },
+  { value: 'hi', label: 'हिन्दी' },
+  { value: 'other', label: 'Otro' }
+] as const;
+
 const ENGLISH_LEVEL_OPTIONS = [
   { value: 'cero', label: 'Cero' },
   { value: 'bajo', label: 'Bajo' },
@@ -149,7 +165,15 @@ export function UserForm() {
     degree: '',
     phone: '',
     englishLevel: '',
-    englishProficiency: ''
+    englishProficiency: '',
+    nativeLanguage: '',
+    expectedSalaryUsd: '',
+    hourlyRateUsd: '0',
+    dailyAvailabilityHours: '8',
+    weekendAvailability: 'false',
+    weekendHours: '0',
+    immediateAvailability: 'false',
+    internetSpeedMbps: ''
   });
 
   const handleChange = (f: keyof typeof formData) => (
@@ -187,9 +211,14 @@ export function UserForm() {
             degree: formData.degree,
             country_code: countryCode,
             phone_number: phoneNumber,
-            // New fields added here:
-            english_level: formData.englishLevel,
-            english_proficiency: formData.englishProficiency,
+            native_language: formData.nativeLanguage,
+            expected_salary_usd: formData.expectedSalaryUsd ? parseFloat(formData.expectedSalaryUsd) : null,
+            hourly_rate_usd: formData.hourlyRateUsd ? parseFloat(formData.hourlyRateUsd) : null,
+            daily_availability_hours: formData.dailyAvailabilityHours ? parseInt(formData.dailyAvailabilityHours) : null,
+            weekend_availability: formData.weekendAvailability === 'true',
+            weekend_hours: formData.weekendHours ? parseInt(formData.weekendHours) : null,
+            immediate_availability: formData.immediateAvailability === 'true',
+            internet_speed_mbps: formData.internetSpeedMbps ? parseInt(formData.internetSpeedMbps) : null,
             completion_time: null
           },
           { onConflict: 'email' }
@@ -391,6 +420,135 @@ export function UserForm() {
                   defaultOption="Selecciona nivel de experiencia"
                 />
               )}
+
+              {/* Native Language */}
+              <SelectField
+                id="nativeLanguage"
+                label="Idioma Nativo"
+                value={formData.nativeLanguage}
+                onChange={handleChange('nativeLanguage')}
+                options={LANGUAGES}
+                defaultOption="Selecciona tu idioma nativo"
+              />
+
+              {/* Expected Monthly Salary */}
+              <div>
+                <label htmlFor="expectedSalaryUsd" className="block text-sm font-medium text-neutral-700">
+                  Salario Mensual Esperado (USD)
+                </label>
+                <Input
+                  id="expectedSalaryUsd"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.expectedSalaryUsd}
+                  onChange={handleChange('expectedSalaryUsd')}
+                  placeholder="1000"
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Hourly Rate */}
+              <div>
+                <label htmlFor="hourlyRateUsd" className="block text-sm font-medium text-neutral-700">
+                  Tarifa por Hora (USD)
+                </label>
+                <Input
+                  id="hourlyRateUsd"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.hourlyRateUsd}
+                  onChange={handleChange('hourlyRateUsd')}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Daily Availability Hours */}
+              <div>
+                <label htmlFor="dailyAvailabilityHours" className="block text-sm font-medium text-neutral-700">
+                  Horas Disponibles por Día
+                </label>
+                <Input
+                  id="dailyAvailabilityHours"
+                  type="number"
+                  min="1"
+                  max="24"
+                  step="1"
+                  value={formData.dailyAvailabilityHours}
+                  onChange={handleChange('dailyAvailabilityHours')}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Weekend Availability */}
+              <div>
+                <label htmlFor="weekendAvailability" className="block text-sm font-medium text-neutral-700">
+                  ¿Puedes Trabajar los Fines de Semana?
+                </label>
+                <select
+                  id="weekendAvailability"
+                  value={formData.weekendAvailability}
+                  onChange={handleChange('weekendAvailability')}
+                  className={selectClass}
+                >
+                  <option value="false">No</option>
+                  <option value="true">Sí</option>
+                </select>
+              </div>
+
+              {/* Weekend Hours (conditional) */}
+              {formData.weekendAvailability === 'true' && (
+                <div>
+                  <label htmlFor="weekendHours" className="block text-sm font-medium text-neutral-700">
+                    Horas Disponibles en Fin de Semana
+                  </label>
+                  <Input
+                    id="weekendHours"
+                    type="number"
+                    min="0"
+                    max="24"
+                    step="1"
+                    value={formData.weekendHours}
+                    onChange={handleChange('weekendHours')}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+
+              {/* Immediate Availability */}
+              <div>
+                <label htmlFor="immediateAvailability" className="block text-sm font-medium text-neutral-700">
+                  ¿Estás Disponible para Comenzar Inmediatamente?
+                </label>
+                <select
+                  id="immediateAvailability"
+                  value={formData.immediateAvailability}
+                  onChange={handleChange('immediateAvailability')}
+                  className={selectClass}
+                >
+                  <option value="false">No</option>
+                  <option value="true">Sí</option>
+                </select>
+              </div>
+
+              {/* Internet Speed */}
+              <div>
+                <label htmlFor="internetSpeedMbps" className="block text-sm font-medium text-neutral-700">
+                  Velocidad de Internet (Mbps)
+                </label>
+                <Input
+                  id="internetSpeedMbps"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.internetSpeedMbps}
+                  onChange={handleChange('internetSpeedMbps')}
+                  placeholder="Ej: 100"
+                  className="mt-1"
+                />
+              </div>
+
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? 'Procesando...' : 'Comenzar'}
               </Button>

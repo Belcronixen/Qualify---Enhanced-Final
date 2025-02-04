@@ -184,20 +184,6 @@ export function FiltersSection({
           </select>
         </div>
 
-        {/* New: Test Completion Status Filter */}
-        <div>
-          <label className={labelClass}>Estado de Test</label>
-          <select
-            value={filters.testStatus}
-            onChange={(e) => updateFilter("testStatus", e.target.value)}
-            className={selectClass}
-          >
-            <option value="All">Todos</option>
-            <option value="Completed">Completado</option>
-            <option value="Incomplete">Incompleto</option>
-          </select>
-        </div>
-
         {/* Despair Level */}
         <div>
           <label className={labelClass}>Nivel de Desesperación</label>

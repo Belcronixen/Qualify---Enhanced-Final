@@ -5,9 +5,131 @@ import { UserCard } from "../UserCard";
 import { FiltersSection } from "../Filters";
 import { Filters, AdvancedFilters, QuestionnaireUser } from "../types";
 import { motion } from 'framer-motion';
-import { Users, Filter, Search, X } from 'lucide-react';
+import { Users, Filter, Search, X, Download } from 'lucide-react';
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
+
+// Country codes to names mapping
+const COUNTRY_NAMES: { [key: string]: string } = {
+  '+1': 'United States/Canada',
+  '+44': 'United Kingdom',
+  '+506': 'Costa Rica',
+  '+507': 'Panama',
+  '+503': 'El Salvador',
+  '+502': 'Guatemala',
+  '+504': 'Honduras',
+  '+505': 'Nicaragua',
+  '+51': 'Peru',
+  '+52': 'Mexico',
+  '+54': 'Argentina',
+  '+55': 'Brazil',
+  '+56': 'Chile',
+  '+57': 'Colombia',
+  '+58': 'Venezuela',
+  '+593': 'Ecuador',
+  '+595': 'Paraguay',
+  '+598': 'Uruguay',
+  '+34': 'Spain',
+};
+
+function downloadCSV(users: QuestionnaireUser[]) {
+  // Define headers
+  const headers = [
+    'First Name',
+    'Last Name',
+    'Email',
+    'Country Code',
+    'Country Name',
+    'Phone Number',
+    'Age',
+    'Role',
+    'Experience Level',
+    'Sign Up Date',
+    'Completion Time (minutes)',
+    'Expected Salary (USD)',
+    'Lower Salary Acceptance',
+    'Dependents',
+    'English Level',
+    'English Proficiency',
+    'Native Language',
+    'Despair Level',
+    'Logic Score',
+    'Technology Score',
+    'Hourly Rate (USD)',
+    'Daily Hours Available',
+    'Weekend Availability',
+    'Weekend Hours',
+    'Immediate Availability'
+  ];
+
+  // Transform data
+  const rows = users.map(user => {
+    // Find the lower salary acceptance response
+    const lowerSalaryResponse = user.responses?.find(r => 
+      r.question?.question_text?.toLowerCase().includes('aceptar un salario menor')
+    );
+
+    // Get category scores
+    const logicScore = user.categoryScores?.['Resolución de Problemas y Pensamiento Crítico']?.percentage || 0;
+    const techScore = user.categoryScores?.['Competencia Tecnológica Básica']?.percentage || 0;
+
+    // Get country name from code
+    const countryName = COUNTRY_NAMES[user.country_code] || 'Unknown';
+
+    // Calculate completion time in minutes
+    const completionTimeMinutes = user.completion_time 
+      ? Math.round(user.completion_time / 60) 
+      : 'N/A';
+
+    return [
+      user.first_name,
+      user.last_name,
+      user.email,
+      user.country_code,
+      countryName,
+      user.phone_number,
+      user.age,
+      user.role,
+      user.experience_level,
+      new Date(user.created_at).toLocaleDateString(),
+      completionTimeMinutes,
+      user.expected_salary_usd || 'N/A',
+      lowerSalaryResponse?.response_text || 'N/A',
+      user.dependents,
+      user.english_level,
+      user.english_proficiency || 'N/A',
+      user.native_language,
+      user.despairLevel?.level || 'N/A',
+      `${logicScore.toFixed(2)}%`,
+      `${techScore.toFixed(2)}%`,
+      user.hourly_rate_usd || 'N/A',
+      user.daily_availability_hours || 'N/A',
+      user.weekend_availability ? 'Yes' : 'No',
+      user.weekend_hours || 'N/A',
+      user.immediate_availability ? 'Yes' : 'No'
+    ];
+  });
+
+  // Create CSV content
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => 
+      typeof cell === 'string' && cell.includes(',') 
+        ? `"${cell}"` 
+        : cell
+    ).join(','))
+  ].join('\n');
+
+  // Create and trigger download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `applicants_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 
 export function ApplicantsPage() {
   const { users, filteredUsers, setFilteredUsers, deleteUser, updateUserScore, loading, error } = useUsers();
@@ -27,7 +149,6 @@ export function ApplicantsPage() {
     despairLevel: '',
     english_level: '',
     english_proficiency: '',
-    testStatus: 'All',  // Added testStatus filter
   });
   
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({
@@ -40,15 +161,6 @@ export function ApplicantsPage() {
     dateTo: '',
     scoreCategory: '',
   });
-
-  // Define total number of questions. Adjust as needed.
-  const TOTAL_QUESTIONS = 10;
-
-  // Helper function to determine if a user's test is complete.
-  const isTestComplete = (user: QuestionnaireUser): boolean => {
-    if (user.completion_time) return true;
-    return user.responses && user.responses.length === TOTAL_QUESTIONS;
-  };
 
   const filterUsers = useCallback(
     (users: QuestionnaireUser[]) => {
@@ -92,14 +204,6 @@ export function ApplicantsPage() {
               user.categoryScores[advancedFilters.scoreCategory].percentage >= parseFloat(advancedFilters.minScore)) &&
             (!advancedFilters.maxScore ||
               user.categoryScores[advancedFilters.scoreCategory].percentage <= parseFloat(advancedFilters.maxScore)));
-        // New filter for test completion status.
-        const mTestStatus =
-          filters.testStatus === 'All'
-            ? true
-            : filters.testStatus === 'Completed'
-            ? isTestComplete(user)
-            : !isTestComplete(user);
-            
         return (
           mSearch &&
           mRole &&
@@ -116,12 +220,11 @@ export function ApplicantsPage() {
           mDep &&
           mDateFrom &&
           mDateTo &&
-          mScoreCat &&
-          mTestStatus
+          mScoreCat
         );
       });
     },
-    [filters, advancedFilters, quickSearch, isTestComplete]
+    [filters, advancedFilters, quickSearch]
   );
 
   useEffect(() => {
@@ -141,7 +244,6 @@ export function ApplicantsPage() {
       despairLevel: '',
       english_level: '',
       english_proficiency: '',
-      testStatus: 'All', // Reset testStatus filter
     });
     setAdvancedFilters({
       minAge: '',
@@ -185,6 +287,13 @@ export function ApplicantsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => downloadCSV(filteredUsers)}
+            className="flex items-center gap-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-100"
+          >
+            <Download className="h-4 w-4" /> Exportar CSV
+          </Button>
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}

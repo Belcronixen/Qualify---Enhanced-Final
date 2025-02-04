@@ -92,13 +92,14 @@ export function AdminLayout() {
       {/* Sidebar - Desktop & Mobile */}
       <AnimatePresence mode="wait">
         {/* Desktop Sidebar */}
-        <div className="relative z-10 hidden md:block">
+        <div key="desktop-sidebar" className="relative z-10 hidden md:block">
           <Sidebar />
         </div>
 
         {/* Mobile Sidebar Overlay */}
         {isSidebarOpen && (
           <motion.div
+            key="mobile-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -109,6 +110,7 @@ export function AdminLayout() {
 
         {/* Mobile Sidebar */}
         <motion.div
+          key="mobile-sidebar"
           initial={{ x: "-100%" }}
           animate={{ x: isSidebarOpen ? 0 : "-100%" }}
           exit={{ x: "-100%" }}
