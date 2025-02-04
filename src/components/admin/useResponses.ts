@@ -6,10 +6,12 @@ export function useResponses() {
   const [userResponses, setUserResponses] = useState<{ [key: string]: UserResponse[] }>({});
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchUserResponses = async (userId: string) => {
     try {
       setLoading(true);
+      setError(null);
       const { data: responses, error: responsesError } = await supabase
         .from('user_responses')
         .select(`
@@ -40,6 +42,7 @@ export function useResponses() {
       setUserResponses(prev => ({ ...prev, [userId]: responses || [] }));
     } catch (err) {
       console.error('Error fetching responses:', err);
+      setError(err instanceof Error ? err.message : 'Error al cargar las respuestas');
     } finally {
       setLoading(false);
     }
@@ -60,6 +63,7 @@ export function useResponses() {
     userResponses,
     expandedUser,
     toggleUserExpansion,
-    loading
+    loading,
+    error
   };
 }

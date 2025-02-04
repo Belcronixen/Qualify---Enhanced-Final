@@ -29,8 +29,8 @@ export function UserResponses({
   const [editingResponseId, setEditingResponseId] = useState<string | null>(null);
   const [tempScore, setTempScore] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  // Add local state for visually updated scores
   const [localScores, setLocalScores] = useState<Record<string, number>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (loading) {
     return (
@@ -90,22 +90,20 @@ export function UserResponses({
 
   const handleSaveScore = async (response: UserResponse) => {
     try {
+      setIsSubmitting(true);
       const newScore = parseFloat(tempScore);
       if (isNaN(newScore) || newScore < 0 || newScore > 1) {
         setError("La puntuación debe estar entre 0 y 1");
         return;
       }
 
-      // Update the visual score immediately
       setLocalScores(prev => ({
         ...prev,
         [response.id]: newScore 
       }));
       
-      // Send to database and wait for response
       await onUpdateScore(userId, response.id, newScore).catch(err => {
         console.error('Error updating score in database:', err);
-        // Optionally revert the visual update if the database update fails
         setLocalScores(prev => ({
           ...prev,
           [response.id]: response.score
@@ -118,6 +116,8 @@ export function UserResponses({
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al actualizar la puntuación");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -192,14 +192,16 @@ export function UserResponses({
                                             variant="outline"
                                             onClick={() => handleSaveScore(r)}
                                             className="text-green-600 hover:bg-green-50"
+                                            disabled={isSubmitting}
                                           >
-                                            Guardar
+                                            {isSubmitting ? 'Guardando...' : 'Guardar'}
                                           </Button>
                                           <Button
                                             size="sm"
                                             variant="ghost"
                                             onClick={handleCancelEdit}
                                             className="text-neutral-600"
+                                            disabled={isSubmitting}
                                           >
                                             Cancelar
                                           </Button>
@@ -245,14 +247,16 @@ export function UserResponses({
                                             variant="outline"
                                             onClick={() => handleSaveScore(r)}
                                             className="text-green-600 hover:bg-green-50"
+                                            disabled={isSubmitting}
                                           >
-                                            Guardar
+                                            {isSubmitting ? 'Guardando...' : 'Guardar'}
                                           </Button>
                                           <Button
                                             size="sm"
                                             variant="ghost"
                                             onClick={handleCancelEdit}
                                             className="text-neutral-600"
+                                            disabled={isSubmitting}
                                           >
                                             Cancelar
                                           </Button>

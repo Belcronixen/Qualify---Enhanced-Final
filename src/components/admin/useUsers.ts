@@ -14,6 +14,56 @@ export function useUsers() {
   const [filteredUsers, setFilteredUsers] = useState<QuestionnaireUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  async function fetchUsers() {
+    try {
+      setLoading(true);
+      setError(null);
+      const { data: usersData, error: usersError } = await supabase
+        .from('questionnaire_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (usersError) throw usersError;
+      const usersWithScores = await Promise.all(
+        (usersData || []).map(async user => {
+          const { data: responses } = await supabase
+            .from('user_responses')
+            .select(`
+              id,
+              score,
+              response_text,
+              is_selection_response,
+              selected_option,
+              question_id,
+              question:questions!inner (
+                question_text,
+                is_selection,
+                is_despair,
+                selection_1_score,
+                selection_2_score,
+                selection_3_score,
+                selection_4_score,
+                category:categories!inner ( name )
+              )
+            `)
+            .eq('user_id', user.id)
+            .not('question.is_hidden', 'eq', true);
+          const categoryScores = calcCategoryScores(responses || []);
+          const despairLevel = calculateDespairLevel(responses || []);
+          return { ...user, categoryScores, despairLevel, responses };
+        })
+      );
+      setUsers(usersWithScores);
+      setFilteredUsers(usersWithScores);
+      setLastUpdate(new Date());
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : 'Error al cargar los datos');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function calcCategoryScores(responses: UserResponse[]) {
     const scores: { [key: string]: { score: number; total: number; percentage: number } } = {};
@@ -45,50 +95,6 @@ export function useUsers() {
   }
 
   useEffect(() => {
-    async function fetchUsers() {
-      try {
-        const { data: usersData, error: usersError } = await supabase
-          .from('questionnaire_users')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (usersError) throw usersError;
-        const usersWithScores = await Promise.all(
-          (usersData || []).map(async user => {
-            const { data: responses } = await supabase
-              .from('user_responses')
-              .select(`
-                id,
-                score,
-                response_text,
-                is_selection_response,
-                selected_option,
-                question_id,
-                question:questions!inner (
-                  question_text,
-                  is_selection,
-                  is_despair,
-                  selection_1_score,
-                  selection_2_score,
-                  selection_3_score,
-                  selection_4_score,
-                  category:categories!inner ( name )
-                )
-              `)
-              .eq('user_id', user.id);
-            const categoryScores = calcCategoryScores(responses || []);
-            const despairLevel = calculateDespairLevel(responses || []);
-            return { ...user, categoryScores, despairLevel, responses };
-          })
-        );
-        setUsers(usersWithScores);
-        setFilteredUsers(usersWithScores);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError(err instanceof Error ? err.message : 'Error al cargar los datos');
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchUsers();
   }, []);
 
@@ -145,5 +151,15 @@ export function useUsers() {
     }
   };
 
-  return { users, filteredUsers, setFilteredUsers, loading, error, updateUserScore, deleteUser };
+  return { 
+    users, 
+    filteredUsers, 
+    setFilteredUsers, 
+    loading, 
+    error, 
+    updateUserScore, 
+    deleteUser,
+    lastUpdate,
+    refetch: fetchUsers 
+  };
 }

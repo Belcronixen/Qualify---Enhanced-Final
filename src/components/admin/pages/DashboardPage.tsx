@@ -1,16 +1,27 @@
 import { useState } from 'react';
 import { useUsers } from '../useUsers';
+import { Button } from '../../ui/button';
 import { DashboardSummary } from '../DashboardSummary';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { UserCard } from '../UserCard';
 import { useResponses } from '../useResponses';
 import { motion } from 'framer-motion';
-import { Users, AlertTriangle } from 'lucide-react';
+import { Users, AlertTriangle, RotateCcw } from 'lucide-react';
 
 export function DashboardPage() {
-  const { users, loading, error, updateUserScore } = useUsers();
+  const { users, loading, error, updateUserScore, refetch } = useUsers();
   const { userResponses, expandedUser, toggleUserExpansion } = useResponses();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -50,7 +61,22 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            {users.length} {users.length === 1 ? 'aplicante' : 'aplicantes'} en total
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="text-neutral-200 border-neutral-800 hover:bg-neutral-800"
+        >
+          <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+        </Button>
       </div>
 
       <CollapsibleSection title="Resumen General">
